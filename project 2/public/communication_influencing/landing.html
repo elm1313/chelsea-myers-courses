@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Communication: Influencing Behavior and Change</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      text-align: center; 
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      width: 90%;
+      padding: 40px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin: 20px;
+    }
+    h1 { 
+      color: #6a43b5; 
+      margin-top: 0;
+      font-size: 28px;
+    }
+    p {
+      color: #666;
+      line-height: 1.6;
+      margin: 15px 0;
+    }
+    .button {
+      display: inline-block;
+      background: #8E44AD;
+      color: white;
+      padding: 15px 30px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 18px;
+      margin-top: 30px;
+      border: none;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    .button:hover {
+      background: #7D3C98;
+    }
+    .loader {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #8E44AD;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #error-message {
+      color: #D8000C;
+      display: none;
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #FFD2D2;
+      border-radius: 5px;
+    }
+    /* Hide reCAPTCHA badge */
+    .grecaptcha-badge {
+      visibility: hidden !important;
+    }
+    iframe[src*="recaptcha"] {
+      visibility: hidden !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="loading-state">
+      <h1>Verifying Your Access</h1>
+      <p>Please wait while we confirm your enrollment...</p>
+      <div class="loader"></div>
+    </div>
+    
+    <div id="authorized-state" style="display:none;">
+      <h1>Communication: Influencing Behavior and Change</h1>
+      <p id="welcome-message">Welcome! Ready to transform your professional interactions with influential communication?</p>
+      
+      <a href="#" class="button" id="enter-course-btn" target="_self">Enter Course</a>
+    </div>
+    
+    <div id="error-message"></div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const SUPABASE_URL = 'https://whfxjpakwumczkojrwmq.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndoZnhqcGFrd3VtY3prb2pyd21xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ3MzAwNzEsImV4cCI6MjA2MDMwNjA3MX0.IRi8kBWtYdBWUUlqjUZS_csaIcO1JUNgY6T4OcrNkPQ';
+      
+      // Get URL parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const email = urlParams.get('email') || '';
+      const name = urlParams.get('name') || '';
+      const accessToken = urlParams.get('access_token') || localStorage.getItem('sb-access-token');
+      
+      // Show error
+      function showError(message) {
+        document.getElementById('loading-state').style.display = 'none';
+        const errorElement = document.getElementById('error-message');
+        errorElement.style.display = 'block';
+        errorElement.textContent = message;
+      }
+      
+      // Show authorized state
+      function showAuthorized() {
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('authorized-state').style.display = 'block';
+        
+        // Update welcome message with name if available
+        if (name) {
+          document.getElementById('welcome-message').textContent = `Welcome, ${name}! Ready to transform your professional interactions with influential communication?`;
+        }
+      }
+
+      // Validate access
+      async function validateAccess() {
+        if (!email || !accessToken) {
+          showError('Missing required authentication information. Please return to the dashboard and try again.');
+          return;
+        }
+
+        try {
+          // First verify the user's session
+          const sessionResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': SUPABASE_ANON_KEY
+            }
+          });
+
+          if (!sessionResponse.ok) {
+            throw new Error('Invalid session');
+          }
+
+          const userData = await sessionResponse.json();
+          
+          // Now check enrollment
+          const enrollmentResponse = await fetch(`${SUPABASE_URL}/rest/v1/enrollments?user_id=eq.${userData.id}&select=id,courses(slug)`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': SUPABASE_ANON_KEY
+            }
+          });
+
+          if (!enrollmentResponse.ok) {
+            throw new Error('Failed to verify enrollment');
+          }
+
+          const enrollments = await enrollmentResponse.json();
+          
+          // Check if user is enrolled in this course or its parent course
+          const hasAccess = enrollments.some(enrollment => 
+            enrollment.courses?.slug === 'influencing-behavior' || 
+            enrollment.courses?.slug === 'communication'
+          );
+
+          if (hasAccess) {
+            showAuthorized();
+            setupCourseButton();
+          } else {
+            showError('You do not have access to this course. Please enroll first.');
+          }
+        } catch (error) {
+          console.error('Validation error:', error);
+          showError('Unable to verify course access. Please try again later.');
+        }
+      }
+      
+      // Set up course entry button
+      function setupCourseButton() {
+        const startButton = document.getElementById('enter-course-btn');
+        if (startButton) {
+          startButton.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Store access token for course content
+            localStorage.setItem('sb-access-token', accessToken);
+            
+            // Redirect to course content with required parameters
+            window.location.href = `scormcontent/index.html?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name)}&access_token=${encodeURIComponent(accessToken)}`;
+          });
+        }
+      }
+      
+      // Start validation
+      validateAccess();
+    });
+  </script>
+</body>
+</html>
